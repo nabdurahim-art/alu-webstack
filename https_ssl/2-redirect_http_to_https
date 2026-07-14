@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Configures HAProxy to redirect HTTP traffic to HTTPS
+
+# Write the HAProxy configuration with redirection rule
+cat << 'EOF' > /etc/haproxy/haproxy.cfg
+global
+    log /dev/log    local0
+    log /dev/log    local1 notice
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    daemon
+    maxconn 2048
+    tune.ssl.default-dh-param 2048
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    retries 3
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+
+frontend http_frontend
+    bind *:80
+    # Permanently redirect HTTP to HTTPS
+    redirect scheme https code 301 if !{ ssl_fc }
+    default_backend web_servers
+
+frontend https_frontend
+    bind *:443 ssl crt /etc/haproxy/certs/abdurahim.tech.pem
+    http-request set-header X-Forwarded-Proto https
+    default_backend web_servers
+
+backend web_servers
+    balance roundrobin
+    http-request set-header X-Served-By %[src]
+    server 7130-web-01 54.172.198.150:80 check
+    server 7130-web-02 3.89.111.203:80 check
+EOF
+
+# Restart HAProxy to apply the changes
+service haproxy restart

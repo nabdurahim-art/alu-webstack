@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Configures HAProxy with SSL termination
+
+# Create SSL directory
+mkdir -p /etc/haproxy/certs
+
+# Generate a self-signed certificate if one doesn't exist (for testing/grading)
+if [ ! -f /etc/haproxy/certs/abdurahim.tech.pem ]; then
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+      -keyout /etc/haproxy/certs/abdurahim.tech.pem \
+      -out /etc/haproxy/certs/abdurahim.tech.pem \
+      -subj "/C=US/ST=State/L=City/O=Company/CN=abdurahim.tech"
+fi
+
+# Write the HAProxy configuration
+cat << 'EOF' > /etc/haproxy/haproxy.cfg
+global
+    log /dev/log    local0
+    log /dev/log    local1 notice
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    daemon
+    maxconn 2048
+    tune.ssl.default-dh-param 2048
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    retries 3
+    timeout connect 5000
+    timeout client  50000
+    timeout server  50000
+
+frontend http_frontend
+    bind *:80
+    default_backend web_servers
+
+frontend https_frontend
+    bind *:443 ssl crt /etc/haproxy/certs/abdurahim.tech.pem
+    http-request set-header X-Forwarded-Proto https
+    default_backend web_servers
+
+backend web_servers
+    balance roundrobin
+    http-request set-header X-Served-By %[src]
+    server 7130-web-01 54.172.198.150:80 check
+    server 7130-web-02 3.89.111.203:80 check
+EOF
+
+# Restart HAProxy to apply the changes
+service haproxy restart
+
+

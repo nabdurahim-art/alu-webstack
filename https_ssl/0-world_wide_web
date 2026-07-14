@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Displays information about a domain's subdomains using dig and awk
+
+# Ensure that the domain argument (first argument) is provided
+if [ -z "$1" ]; then
+    exit 1
+fi
+
+DOMAIN="$1"
+SUB_DOMAIN="$2"
+
+# A function to query a specific subdomain and output its A/CNAME record
+audit_subdomain() {
+    local sub="$1"
+    local dom="$2"
+    local result
+
+    # Query DNS, extract the IP/Destination, and format the output
+    # Ignoring shellcheck SC2086 as explicitly required by the instructions
+    # shellcheck disable=SC2086
+    result=$(dig +noall +answer "${sub}.${dom}" | grep -E '(\s+A\s+|\s+CNAME\s+)' | tail -n 1)
+
+    # Use awk to safely print the formatted string
+    # Changed internal variable 'sub' to 'sub_name' to prevent built-in function collision
+    echo "$result" | awk -v sub_name="$sub" '{print "The subdomain " sub_name " is a " $4 " record and points to " $5}'
+}
+
+# Core Routing Logic
+if [ -z "$SUB_DOMAIN" ]; then
+    # When no subdomain is passed, audit the defaults in this specific order
+    audit_subdomain "www" "$DOMAIN"
+    audit_subdomain "lb-01" "$DOMAIN"
+    audit_subdomain "web-01" "$DOMAIN"
+    audit_subdomain "web-02" "$DOMAIN"
+else
+    # If a specific subdomain is passed, audit only that one
+    audit_subdomain "$SUB_DOMAIN" "$DOMAIN"
+fi
+
